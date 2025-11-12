@@ -1,0 +1,89 @@
+# General Code Style & Formatting
+- Use English for all code and documentation.
+- Always declare the type of each variable and function (parameters and return value).
+- Avoid using any.
+- Create necessary types.
+- Use JSDoc to document public classes and methods.
+- Don't leave blank lines within a function.
+- One export per file.
+
+# Naming Conventions
+- Use PascalCase for classes.
+- Use camelCase for variables, functions, and methods.
+- Use kebab-case for file and directory names.
+- Use UPPERCASE for environment variables.
+- Avoid magic numbers and define constants.
+
+# Functions & Logic
+- Keep functions short and single-purpose (<20 lines).
+- Avoid deeply nested blocks by:
+- Use early returns.
+- Extract logic into utility functions.
+- Use higher-order functions (map, filter, reduce) to simplify logic.
+- Use arrow functions for simple cases (<3 instructions), named functions otherwise.
+- Use default parameter values instead of null/undefined checks.
+- Use RO-RO (Receive Object, Return Object) for passing and returning multiple parameters.
+
+# Data Handling
+- Avoid placing validation inside functions—use classes with internal validation instead.
+- Prefer immutability for data:
+- Use readonly for immutable properties.
+- Use as const for literals that never change.
+- Use type guards to validate data types.
+- Prefer 'for...of' loops over 'forEach' for iteration.
+
+# Effect
+- Use Effect.flatMap for async operations.
+- Use Effect.logDebug for debugging.
+- Use Effect.logWarning for warnings.
+- Use Effect.logError for errors.
+- Use Effect latest
+- Avoid using the (_) pattern in Effect.gen.
+
+You are an expert in Typescript, Node.js, vitest and Bun.
+Use Typescript version latest.
+
+Code Style and Structure
+- Write concise, technical Typescript code with accurate examples.
+- Use function and declaritive programming patterns consistent with Effect.ts.
+- Prefer iteration and modularization over code duplication.
+- Use descriptive variable names with auxilary verbs (e.g. isLoading, hasError).
+- Structure files: exported components, subcomponents, helpers, static content, types.
+
+Typescript Usage
+- Use Typescript for all code; prefer interfaces over types.
+- Avoid enums; use maps instead.
+- Use the "function" keyword for pure functions.
+- Never move or delete biome directives
+- Make sure all answers are typesafe
+- prefer Typescript interfaces over Typescript types
+
+Syntax and Formatting
+- Avoid unneeded semicolons.
+- Use declaritive TSX
+
+Effect.ts Usage
+- Use Effect version 3.16
+- Use the Effect.Service pattern for dependency injection
+- Use Effect.gen for complex operations
+- Use pipe() for chaining operations
+- Handle errors with Effect.catchAll or Effect.mapError
+- Use Layer.provide for providing dependencies
+- Prefer Effect pattern over traditional async/await except when interfacing with non-Effect code
+
+Tools
+- Use pnpm as you package manager.
+- Use Vitest for testing.
+- Don't use Vitest for mocking test data.  Build custom mocks instead.
+
+Do not hallucinate.
+
+When testing an agent or a node in an agent, use the shared configuration service. 
+
+Plese use ./content/ folder.
+for ANY question about Effect-ts, use the context7 https://context7.com/effect-ts/effect
+for ANY question about grpc, use the grpc https://context7.com/grpc/grpc-node
+
+Please write a grpc transport layer like @effect/rpc.
+I would like to put the code on ./src/ folder.
+I need an example on the ./src/example/ folder.

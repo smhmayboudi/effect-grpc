@@ -1,10 +1,10 @@
 {
-  "name": "@template/basic",
-  "version": "0.0.0",
+  "name": "@effect/grpc",
+  "version": "1.0.0",
   "type": "module",
   "packageManager": "pnpm@10.14.0",
   "license": "MIT",
-  "description": "A basic Effect package",
+  "description": "Effect-based gRPC transport layer similar to @effect/rpc",
   "repository": {
     "type": "git",
     "url": "<PLACEHOLDER>"
@@ -12,6 +12,12 @@
   "publishConfig": {
     "access": "public",
     "directory": "dist"
+  },
+  "main": "./build/cjs/index.js",
+  "module": "./build/esm/index.js",
+  "types": "./build/dts/index.d.ts",
+  "exports": {
+    ".": "./build/esm/index.js"
   },
   "scripts": {
     "codegen": "build-utils prepare-v2",
@@ -28,7 +34,10 @@
     "changeset-publish": "pnpm build && TEST_DIST= pnpm vitest && changeset publish"
   },
   "dependencies": {
-    "effect": "latest"
+    "effect": "latest",
+    "@effect/rpc": "latest",
+    "@grpc/grpc-js": "^1.10.9",
+    "@grpc/proto-loader": "^0.7.13"
   },
   "devDependencies": {
     "@babel/cli": "^7.24.8",
