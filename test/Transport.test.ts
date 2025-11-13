@@ -3,8 +3,7 @@
  */
 
 import { describe, it } from "@effect/vitest"
-import * as Effect from "effect/Effect"
-import * as Schema from "effect/Schema"
+import { Effect, Schema } from "effect"
 import { expect } from "vitest"
 import * as GrpcTransport from "../src/Transport.js"
 
@@ -26,7 +25,7 @@ describe("GrpcTransport", () => {
       url: "localhost:50051"
     }
 
-    const layer = GrpcTransport.makeLive(config)
+    const layer = GrpcTransport.make(config)
 
     // Test that the layer can be created without errors
     Effect.runSync(
@@ -47,7 +46,7 @@ describe("GrpcTransport", () => {
       url: "localhost:50051"
     }
 
-    const layer = GrpcTransport.makeLive(config)
+    const layer = GrpcTransport.make(config)
 
     Effect.runPromise(
       Effect.gen(function*() {
@@ -73,7 +72,7 @@ describe("GrpcTransport", () => {
       url: "localhost:50051"
     }
 
-    const layer = GrpcTransport.makeLive(config)
+    const layer = GrpcTransport.make(config)
 
     Effect.runPromise(
       Effect.gen(function*() {

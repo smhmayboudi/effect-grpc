@@ -3,8 +3,7 @@
  */
 
 import { describe, it } from "@effect/vitest"
-import * as Effect from "effect/Effect"
-import * as Schema from "effect/Schema"
+import { Effect, Schema } from "effect"
 import { expect } from "vitest"
 import * as GrpcService from "../src/Service.js"
 
@@ -27,7 +26,7 @@ const TestResponseSchema: Schema.Schema<TestResponse, any> = Schema.Struct({
 
 describe("GrpcService", () => {
   it("should create a service layer", () => {
-    const layer = GrpcService.makeLive("./test.proto")
+    const layer = GrpcService.make("./test.proto")
 
     Effect.runSync(
       Effect.gen(function*() {
@@ -40,7 +39,7 @@ describe("GrpcService", () => {
   })
 
   it("should register a service", () => {
-    const layer = GrpcService.makeLive("./test.proto")
+    const layer = GrpcService.make("./test.proto")
 
     Effect.runPromise(
       Effect.gen(function*() {
@@ -63,7 +62,7 @@ describe("GrpcService", () => {
   })
 
   it("should start and stop a server", () => {
-    const layer = GrpcService.makeLive("./test.proto")
+    const layer = GrpcService.make("./test.proto")
 
     Effect.runPromise(
       Effect.gen(function*() {

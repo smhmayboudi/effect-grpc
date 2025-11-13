@@ -3,8 +3,7 @@
  */
 
 import { describe, it } from "@effect/vitest"
-import * as Effect from "effect/Effect"
-import * as Schema from "effect/Schema"
+import { Effect, Schema } from "effect"
 import { expect } from "vitest"
 import * as GrpcRouter from "../src/Router.js"
 
@@ -27,7 +26,7 @@ const TestResponseSchema: Schema.Schema<TestResponse, any> = Schema.Struct({
 
 describe("GrpcRouter", () => {
   it("should create a router layer", () => {
-    const layer = GrpcRouter.makeLive
+    const layer = GrpcRouter.make
 
     Effect.runSync(
       Effect.gen(function*() {
@@ -40,7 +39,7 @@ describe("GrpcRouter", () => {
   })
 
   it("should add a route", () => {
-    const layer = GrpcRouter.makeLive
+    const layer = GrpcRouter.make
 
     Effect.runPromise(
       Effect.gen(function*() {
@@ -62,7 +61,7 @@ describe("GrpcRouter", () => {
   })
 
   it("should handle requests", () => {
-    const layer = GrpcRouter.makeLive
+    const layer = GrpcRouter.make
 
     Effect.runPromise(
       Effect.gen(function*() {

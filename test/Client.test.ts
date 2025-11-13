@@ -3,10 +3,7 @@
  */
 
 import { describe, it } from "@effect/vitest"
-import * as Effect from "effect/Effect"
-import * as Layer from "effect/Layer"
-import * as Schema from "effect/Schema"
-import * as Stream from "effect/Stream"
+import { Effect, Layer, Schema, Stream } from "effect"
 import { expect } from "vitest"
 import * as GrpcClient from "../src/Client.js"
 import * as GrpcTransport from "../src/Transport.js"
@@ -37,8 +34,8 @@ describe("GrpcClient", () => {
       url: "localhost:50051"
     }
 
-    const transportLayer = GrpcTransport.makeLive(transportConfig)
-    const clientLayer = GrpcClient.makeLive
+    const transportLayer = GrpcTransport.make(transportConfig)
+    const clientLayer = GrpcClient.make()
     const appLayer = Layer.provide(clientLayer, transportLayer)
 
     Effect.runSync(
@@ -59,8 +56,8 @@ describe("GrpcClient", () => {
       url: "localhost:50051"
     }
 
-    const transportLayer = GrpcTransport.makeLive(transportConfig)
-    const clientLayer = GrpcClient.makeLive
+    const transportLayer = GrpcTransport.make(transportConfig)
+    const clientLayer = GrpcClient.make()
     const appLayer = Layer.provide(clientLayer, transportLayer)
 
     Effect.runPromise(
@@ -94,8 +91,8 @@ describe("GrpcClient", () => {
       url: "localhost:50051"
     }
 
-    const transportLayer = GrpcTransport.makeLive(transportConfig)
-    const clientLayer = GrpcClient.makeLive
+    const transportLayer = GrpcTransport.make(transportConfig)
+    const clientLayer = GrpcClient.make()
     const appLayer = Layer.provide(clientLayer, transportLayer)
 
     Effect.runPromise(
