@@ -100,8 +100,18 @@ export const make = (config: GrpcTransportConfig): Layer.Layer<GrpcTransport> =>
 
       const grpcPackage = grpc.loadPackageDefinition(packageDefinition)
 
-      // Find the service in the package structure
-      const service = (grpcPackage[config.packageName] as grpc.GrpcObject)?.[config.serviceName] as
+      // Find the service in the package structure with better type safety
+      const grpcObject = grpcPackage[config.packageName]
+      if (!grpcObject || typeof grpcObject !== "object") {
+        return yield* Effect.die(
+          new GrpcError({
+            details: `Available packages: ${Object.keys(grpcPackage).join(", ")}`,
+            message: `Package ${config.packageName} not found in proto file`
+          })
+        )
+      }
+
+      const service = (grpcObject as grpc.GrpcObject)[config.serviceName] as
         | grpc.ServiceClientConstructor
         | undefined
 

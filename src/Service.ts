@@ -137,18 +137,31 @@ export const make = (protoPath: string): Layer.Layer<GrpcService> =>
         [GrpcServiceTypeId]: GrpcServiceTypeId,
         register: (serviceDef: GrpcServiceDef) =>
           Effect.gen(function*() {
-            const serviceDefinition = (grpcPackage[serviceDef.packageName] as grpc.GrpcObject)?.[serviceDef.name]
+            const grpcObject = grpcPackage[serviceDef.packageName]
+            if (!grpcObject || typeof grpcObject !== "object") {
+              return yield* Effect.fail(
+                new GrpcServiceError({ message: `Package ${serviceDef.packageName} not found in proto file` })
+              )
+            }
 
+            const serviceDefinition = (grpcObject as grpc.GrpcObject)[serviceDef.name]
             if (!serviceDefinition) {
               return yield* Effect.fail(
                 new GrpcServiceError({ message: `Service ${serviceDef.name} not found in proto file` })
               )
             }
 
+            // Type guard to ensure serviceDefinition has the expected structure
+            if (!("service" in serviceDefinition)) {
+              return yield* Effect.fail(
+                new GrpcServiceError({ message: `Service ${serviceDef.name} does not have the expected structure` })
+              )
+            }
+
             const serviceImpl: grpc.UntypedServiceImplementation = {}
 
             for (const [methodName, methodDef] of Object.entries(serviceDef.methods)) {
-              const method = (serviceDefinition as any).service[methodName]
+              const method = (serviceDefinition as { service: any }).service[methodName]
               const isStream = method.requestStream || method.responseStream || methodDef.isStream
               if (isStream) {
                 // Streaming method implementation
@@ -202,7 +215,7 @@ export const make = (protoPath: string): Layer.Layer<GrpcService> =>
               }
             }
 
-            server.addService((serviceDefinition as any).service, serviceImpl)
+            server.addService((serviceDefinition as { service: grpc.ServiceDefinition }).service, serviceImpl)
           }),
         start: (port: number) =>
           Effect.async<void, GrpcServiceError>((resume) => {
