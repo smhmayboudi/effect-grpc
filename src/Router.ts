@@ -2,10 +2,7 @@
  * @since 1.0.0
  */
 
-import * as Context from "effect/Context"
-import * as Effect from "effect/Effect"
-import * as Layer from "effect/Layer"
-import type * as Schema from "effect/Schema"
+import { Context, Effect, Layer, type Schema } from "effect"
 
 /**
  * @since 1.0.0
@@ -23,7 +20,7 @@ export interface GrpcRouteDef<I, O> {
   readonly path: string
   readonly input: Schema.Schema<I, any>
   readonly output: Schema.Schema<O, any>
-  readonly handler: (input: I) => Effect.Effect<O, unknown, any>
+  readonly handler: (input: I) => Effect.Effect<O, any, any>
 }
 
 /**
@@ -37,7 +34,7 @@ export class GrpcRouter extends Context.Tag("@template/basic/GrpcRouter")<
       path: string,
       input: Schema.Schema<I, any>,
       output: Schema.Schema<O, any>,
-      handler: (input: I) => Effect.Effect<O, unknown, any>
+      handler: (input: I) => Effect.Effect<O, any, any>
     ) => Effect.Effect<void>
     readonly handle: Effect.Effect<void>
   }
@@ -51,7 +48,7 @@ export const makeRoute = <I, O>(
   path: string,
   input: Schema.Schema<I, any>,
   output: Schema.Schema<O, any>,
-  handler: (input: I) => Effect.Effect<O, unknown, any>
+  handler: (input: I) => Effect.Effect<O, any, any>
 ): GrpcRouteDef<I, O> => ({
   path,
   input,
@@ -71,12 +68,13 @@ export const make: Layer.Layer<GrpcRouter> = Layer.effect(
     return GrpcRouter.of({
       addRoute: <I, O>(
         path: string,
-        input: Schema.Schema<I, unknown>,
-        output: Schema.Schema<O, unknown>,
-        handler: (input: I) => Effect.Effect<O, unknown, any>
+        input: Schema.Schema<I, any>,
+        output: Schema.Schema<O, any>,
+        handler: (input: I) => Effect.Effect<O, any, any>
       ) => {
         routes.push({ path, input, output, handler })
-        return Effect.succeed(undefined)
+
+        return Effect.void
       },
       handle: Effect.gen(function*() {
         // This would be where we set up the gRPC server to handle routes

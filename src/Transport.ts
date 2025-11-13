@@ -4,12 +4,7 @@
 
 import * as grpc from "@grpc/grpc-js"
 import * as protoLoader from "@grpc/proto-loader"
-import * as Context from "effect/Context"
-import * as Effect from "effect/Effect"
-import * as Layer from "effect/Layer"
-import * as Schema from "effect/Schema"
-import * as Stream from "effect/Stream"
-
+import { Context, Effect, Layer, Schema, Stream } from "effect"
 /**
  * @since 1.0.0
  * @category models
@@ -23,10 +18,11 @@ import * as Stream from "effect/Stream"
  * @category models
  */
 export interface GrpcTransportConfig {
-  readonly url: string
+  readonly headers?: Record<string, string>
+  readonly packageName: string
   readonly protoPath: string
   readonly serviceName: string
-  readonly headers?: Record<string, string>
+  readonly url: string
 }
 
 /**
@@ -56,8 +52,8 @@ export class GrpcTransport extends Context.Tag("@template/basic/GrpcTransport")<
  */
 export const make: (
   config: GrpcTransportConfig
-) => Layer.Layer<GrpcTransport> = (config) => {
-  return Layer.effect(
+) => Layer.Layer<GrpcTransport> = (config) =>
+  Layer.effect(
     GrpcTransport,
     Effect.gen(function*() {
       // Client will be initialized when first method is called
@@ -66,32 +62,19 @@ export const make: (
       // Initialize client when first needed
       const initializeClient = yield* Effect.gen(function*() {
         // Load the proto file when first needed
-        const packageDefinition = yield* Effect.try({
-          try: () =>
-            protoLoader.loadSync(config.protoPath, {
-              keepCase: true,
-              longs: String,
-              enums: String,
-              defaults: true,
-              oneofs: true
-            }),
-          catch: (error) => new Error(`Failed to load proto file: ${error}`)
+        const packageDefinition = protoLoader.loadSync(config.protoPath, {
+          keepCase: true,
+          longs: String,
+          enums: String,
+          defaults: true,
+          oneofs: true
         })
 
         // Load the gRPC package
         const grpcPackage = grpc.loadPackageDefinition(packageDefinition)
 
         // Get the service using the correct package structure
-        let foundService = grpcPackage[config.serviceName]
-        if (!foundService) {
-          const packageKeys = Object.keys(grpcPackage as any)
-          for (const pkg of packageKeys) {
-            if ((grpcPackage as any)[pkg] && (grpcPackage as any)[pkg][config.serviceName]) {
-              foundService = (grpcPackage as any)[pkg][config.serviceName]
-              break
-            }
-          }
-        }
+        const foundService = (grpcPackage[config.packageName] as grpc.GrpcObject)[config.serviceName]
 
         if (!foundService) {
           return yield* Effect.die(new Error(`Service ${config.serviceName} not found in proto`))
@@ -135,26 +118,26 @@ export const make: (
           method: string,
           request: unknown,
           schema: Schema.Schema<A, any, R>
-        ) => {
-          return Effect.catchAll(
+        ) =>
+          Effect.catchAll(
             Effect.flatMap(
               initializeClient,
               (client) => {
+                console.log({ method, request, schema, client })
                 // In a real implementation, we would make the actual gRPC call
                 // For mock: just decode and return the request
                 return Schema.decodeUnknown(schema)(request)
               }
             ),
-            (error) => Effect.die(error) as Effect.Effect<A, E, R>
-          )
-        },
+            (error) => Effect.die(error)
+          ),
         callStream: <A, E, R>(
           method: string,
           request: unknown,
           schema: Schema.Schema<A, any, R>
         ) => {
           // For streaming, return an empty stream in mock mode
-          return Stream.empty as Stream.Stream<A, E, R>
+          return Stream.empty
         },
         close: Effect.sync(() => {
           if (initializedClient && typeof initializedClient.close === "function") {
@@ -164,7 +147,6 @@ export const make: (
       })
     })
   )
-}
 
 /**
  * @since 1.0.0
@@ -172,6 +154,4 @@ export const make: (
  */
 export const makeLive: (
   config: GrpcTransportConfig
-) => Layer.Layer<GrpcTransport> = (config) => {
-  return make(config)
-}
+) => Layer.Layer<GrpcTransport> = (config) => make(config)

@@ -31,9 +31,10 @@ const TestResponseSchema: Schema.Schema<TestResponse, any> = Schema.Struct({
 describe("GrpcClient", () => {
   it("should create a client layer", () => {
     const transportConfig: GrpcTransport.GrpcTransportConfig = {
-      url: "localhost:50051",
+      packageName: "test",
       protoPath: "./test.proto",
-      serviceName: "TestService"
+      serviceName: "TestService",
+      url: "localhost:50051"
     }
 
     const transportLayer = GrpcTransport.makeLive(transportConfig)
@@ -52,9 +53,10 @@ describe("GrpcClient", () => {
 
   it("should make a unary call", () => {
     const transportConfig: GrpcTransport.GrpcTransportConfig = {
-      url: "localhost:50051",
+      packageName: "test",
       protoPath: "./test.proto",
-      serviceName: "TestService"
+      serviceName: "TestService",
+      url: "localhost:50051"
     }
 
     const transportLayer = GrpcTransport.makeLive(transportConfig)
@@ -86,9 +88,10 @@ describe("GrpcClient", () => {
 
   it("should make a streaming call", () => {
     const transportConfig: GrpcTransport.GrpcTransportConfig = {
-      url: "localhost:50051",
+      packageName: "test",
       protoPath: "./test.proto",
-      serviceName: "TestService"
+      serviceName: "TestService",
+      url: "localhost:50051"
     }
 
     const transportLayer = GrpcTransport.makeLive(transportConfig)

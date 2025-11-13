@@ -20,9 +20,10 @@ const TestResponseSchema: Schema.Schema<TestResponse, any> = Schema.Struct({
 describe("GrpcTransport", () => {
   it("should create a transport layer", () => {
     const config: GrpcTransport.GrpcTransportConfig = {
-      url: "localhost:50051",
+      packageName: "test",
       protoPath: "./test.proto",
-      serviceName: "TestService"
+      serviceName: "TestService",
+      url: "localhost:50051"
     }
 
     const layer = GrpcTransport.makeLive(config)
@@ -40,9 +41,10 @@ describe("GrpcTransport", () => {
 
   it("should make a unary call", () => {
     const config: GrpcTransport.GrpcTransportConfig = {
-      url: "localhost:50051",
+      packageName: "test",
       protoPath: "./test.proto",
-      serviceName: "TestService"
+      serviceName: "TestService",
+      url: "localhost:50051"
     }
 
     const layer = GrpcTransport.makeLive(config)
@@ -65,9 +67,10 @@ describe("GrpcTransport", () => {
 
   it("should close properly", () => {
     const config: GrpcTransport.GrpcTransportConfig = {
-      url: "localhost:50051",
+      packageName: "test",
       protoPath: "./test.proto",
-      serviceName: "TestService"
+      serviceName: "TestService",
+      url: "localhost:50051"
     }
 
     const layer = GrpcTransport.makeLive(config)

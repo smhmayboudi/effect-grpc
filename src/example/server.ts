@@ -4,9 +4,7 @@
  * This example demonstrates how to create a gRPC service with our Effect-based transport
  */
 
-import * as Effect from "effect/Effect"
-import * as Layer from "effect/Layer"
-import * as Schema from "effect/Schema"
+import { Effect, Layer, Schema } from "effect"
 import * as GrpcRouter from "../Router.js"
 import * as GrpcService from "../Service.js"
 
@@ -42,7 +40,7 @@ const runServer = Effect.gen(function*() {
   const serviceLayer = GrpcService.makeLive("./src/example/greeter.proto")
 
   // Combine the layers
-  const serverLayer = Layer.provide(routerLayer, serviceLayer)
+  const serverLayer = Layer.provideMerge(routerLayer, serviceLayer)
 
   // Register the service methods with specific context
   yield* (Effect.gen(function*() {
@@ -66,7 +64,7 @@ const runServer = Effect.gen(function*() {
 
     // Register the service with the gRPC server
     yield* service.register(
-      GrpcService.makeService("Greeter", {
+      GrpcService.makeService("example", "Greeter", {
         SayHello: GrpcService.makeMethod(HelloRequestSchema, HelloReplySchema, sayHelloHandler),
         SayHelloStream: GrpcService.makeMethod(HelloRequestSchema, HelloReplySchema, sayHelloStreamHandler)
       })
@@ -80,10 +78,9 @@ const runServer = Effect.gen(function*() {
     yield* router.handle
 
     // Keep the server running
-    yield* Effect.never
+    // yield* Effect.never
   })).pipe(
-    Effect.provide(serverLayer),
-    Effect.provide(serviceLayer)
+    Effect.provide(serverLayer)
   )
 })
 

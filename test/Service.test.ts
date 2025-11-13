@@ -51,9 +51,7 @@ describe("GrpcService", () => {
           (req: TestRequest) => Effect.succeed({ result: `Processed: ${req.message}` })
         )
 
-        const serviceDef = GrpcService.makeService("TestService", {
-          TestMethod: testMethod
-        })
+        const serviceDef = GrpcService.makeService("Test", "TestService", { TestMethod: testMethod })
 
         yield* service.register(serviceDef)
         // Verify registration executes without error

@@ -4,10 +4,7 @@
 
 import * as grpc from "@grpc/grpc-js"
 import * as protoLoader from "@grpc/proto-loader"
-import * as Context from "effect/Context"
-import * as Effect from "effect/Effect"
-import * as Layer from "effect/Layer"
-import * as Schema from "effect/Schema"
+import { Context, Effect, Layer, Schema } from "effect"
 
 /**
  * @since 1.0.0
@@ -24,7 +21,7 @@ import * as Schema from "effect/Schema"
 export interface GrpcMethodDef<I, O> {
   readonly input: Schema.Schema<I, any>
   readonly output: Schema.Schema<O, any>
-  readonly handler: (input: I) => Effect.Effect<O, unknown, any>
+  readonly handler: (input: I) => Effect.Effect<O, any, any>
 }
 
 /**
@@ -34,6 +31,7 @@ export interface GrpcMethodDef<I, O> {
 export interface GrpcServiceDef {
   readonly name: string
   readonly methods: Record<string, GrpcMethodDef<any, any>>
+  readonly packageName: string
 }
 
 /**
@@ -56,7 +54,7 @@ export class GrpcService extends Context.Tag("@template/basic/GrpcService")<
 export const makeMethod = <I, O>(
   input: Schema.Schema<I, any>,
   output: Schema.Schema<O, any>,
-  handler: (input: I) => Effect.Effect<O, unknown, any>
+  handler: (input: I) => Effect.Effect<O, any, any>
 ): GrpcMethodDef<I, O> => ({
   input,
   output,
@@ -68,11 +66,13 @@ export const makeMethod = <I, O>(
  * @category constructors
  */
 export const makeService = (
+  packageName: string,
   name: string,
   methods: Record<string, GrpcMethodDef<any, any>>
 ): GrpcServiceDef => ({
   name,
-  methods
+  methods,
+  packageName
 })
 
 /**
@@ -81,111 +81,89 @@ export const makeService = (
  */
 export const make: (
   protoPath: string
-) => Layer.Layer<GrpcService> = (protoPath) => {
-  return Layer.effect(
+) => Layer.Layer<GrpcService> = (protoPath) =>
+  Layer.effect(
     GrpcService,
     Effect.sync(() => {
       const server = new grpc.Server()
 
       return GrpcService.of({
-        register: (service: GrpcServiceDef) => {
-          return Effect.catchAll(
-            Effect.gen(function*() {
-              // Load the proto file when register is called
-              const packageDefinition = yield* Effect.try({
-                try: () =>
-                  protoLoader.loadSync(protoPath, {
-                    keepCase: true,
-                    longs: String,
-                    enums: String,
-                    defaults: true,
-                    oneofs: true
-                  }),
-                catch: (error) => new Error(`Failed to load proto file: ${error}`)
-              })
+        register: (service: GrpcServiceDef) =>
+          Effect.sync(() => {
+            // Load the proto file when register is called
+            const packageDefinition = protoLoader.loadSync(protoPath, {
+              defaults: true,
+              enums: String,
+              keepCase: true,
+              longs: String,
+              oneofs: true
+            })
 
-              const grpcPackage = grpc.loadPackageDefinition(packageDefinition)
+            const grpcPackage = grpc.loadPackageDefinition(packageDefinition)
 
-              // Get the service definition from the loaded proto
-              // gRPC packages typically have the structure grpcPackage[packageName][serviceName]
-              let serviceDefinition: any = null
+            // Get the service definition from the loaded proto
+            // gRPC packages typically have the structure grpcPackage[packageName][serviceName]
+            const serviceDefinition = (grpcPackage[service.packageName] as grpc.GrpcObject)[service.name]
 
-              // First try the direct access (in case service is at root level)
-              serviceDefinition = (grpcPackage as any)[service.name]
+            if (!serviceDefinition) {
+              throw new Error(`Service ${service.name} not found in proto file`)
+            }
 
-              // If not found, look for it in the nested package structure
-              if (!serviceDefinition) {
-                const packageKeys = Object.keys(grpcPackage as any)
-                for (const pkg of packageKeys) {
-                  if ((grpcPackage as any)[pkg] && (grpcPackage as any)[pkg][service.name]) {
-                    serviceDefinition = (grpcPackage as any)[pkg][service.name]
-                    break
-                  }
+            const serviceImpl: grpc.UntypedServiceImplementation = {}
+
+            for (const [methodName, methodDef] of Object.entries(service.methods)) {
+              serviceImpl[methodName] = (
+                call: grpc.ServerUnaryCall<any, any>,
+                callback: grpc.sendUnaryData<any>
+              ) => {
+                // Decode the request synchronously to avoid context issues
+                try {
+                  const decodedRequest = Schema.decodeSync(methodDef.input)(call.request)
+                  // Run the handler effect
+                  Effect.runPromise(methodDef.handler(decodedRequest) as any).then(
+                    (result) => {
+                      // Encode the response
+                      const encodedResult = Schema.encode(methodDef.output)(result)
+                      callback(null, encodedResult)
+                    },
+                    (error) => {
+                      callback(error)
+                    }
+                  )
+                } catch (error) {
+                  callback(
+                    new Error(
+                      `Request validation failed: ${error instanceof Error ? error.message : String(error)}`
+                    ),
+                    null
+                  )
                 }
               }
+            }
 
-              if (!serviceDefinition) {
-                throw new Error(`Service ${service.name} not found in proto file`)
-              }
-
-              const serviceImpl: grpc.UntypedServiceImplementation = {}
-
-              for (const [methodName, methodDef] of Object.entries(service.methods)) {
-                serviceImpl[methodName] = (
-                  call: grpc.ServerUnaryCall<any, any>,
-                  callback: grpc.sendUnaryData<any>
-                ) => {
-                  // Decode the request synchronously to avoid context issues
-                  try {
-                    const decodedRequest = Schema.decodeSync(methodDef.input)(call.request)
-                    // Run the handler effect
-                    Effect.runPromise(methodDef.handler(decodedRequest) as any).then(
-                      (result) => {
-                        // Encode the response
-                        const encodedResult = Schema.encode(methodDef.output)(result)
-                        callback(null, encodedResult)
-                      },
-                      (error) => {
-                        callback(error, null)
-                      }
-                    )
-                  } catch (error) {
-                    callback(
-                      new Error(
-                        `Request validation failed: ${error instanceof Error ? error.message : String(error)}`
-                      ),
-                      null
-                    )
-                  }
-                }
-              }
-
-              // Register the service with the server
-              server.addService((serviceDefinition as any).service, serviceImpl)
-            }),
-            (error) => Effect.die(error)
-          )
-        },
-        start: (port: number) => {
-          return Effect.async<void>((resume) => {
+            // Register the service with the server
+            server.addService((serviceDefinition as any).service, serviceImpl)
+          }),
+        start: (port: number) =>
+          Effect.async((resume) => {
             server.bindAsync(`0.0.0.0:${port}`, grpc.ServerCredentials.createInsecure(), (error, portBound) => {
               if (error) {
                 resume(Effect.die(error))
               } else {
                 // server.start()
                 console.log(`gRPC server started on port ${portBound}`)
-                resume(Effect.succeed(undefined))
+                resume(Effect.void)
               }
             })
-          })
-        },
+          }),
         stop: Effect.sync(() => {
-          server.tryShutdown(() => {})
+          server.tryShutdown((error) => {
+            console.log(`gRPC server shutdown with error: ${String(error)}`)
+          })
         })
       })
     })
   )
-}
 
 /**
  * @since 1.0.0
@@ -193,6 +171,4 @@ export const make: (
  */
 export const makeLive: (
   protoPath: string
-) => Layer.Layer<GrpcService> = (protoPath) => {
-  return make(protoPath)
-}
+) => Layer.Layer<GrpcService> = (protoPath) => make(protoPath)

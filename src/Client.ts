@@ -2,11 +2,7 @@
  * @since 1.0.0
  */
 
-import * as Context from "effect/Context"
-import * as Effect from "effect/Effect"
-import * as Layer from "effect/Layer"
-import type * as Schema from "effect/Schema"
-import type * as Stream from "effect/Stream"
+import { Context, Effect, Layer, type Schema, type Stream } from "effect"
 import * as GrpcTransport from "./Transport.js"
 
 /**
@@ -69,18 +65,14 @@ export const make: Layer.Layer<GrpcClient, never, GrpcTransport.GrpcTransport> =
     const transport = yield* GrpcTransport.GrpcTransport
 
     return GrpcClient.of({
-      call: <I, O, R>(
+      call: <I, O>(
         method: GrpcClientMethod<I, O>,
         input: I
-      ) => {
-        return transport.call(method.path, input, method.output)
-      },
-      callStream: <I, O, R>(
+      ) => transport.call(method.path, input, method.output),
+      callStream: <I, O>(
         method: GrpcClientMethod<I, O>,
         input: I
-      ) => {
-        return transport.callStream(method.path, input, method.output)
-      }
+      ) => transport.callStream(method.path, input, method.output)
     })
   })
 )

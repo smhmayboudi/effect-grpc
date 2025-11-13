@@ -4,10 +4,7 @@
  * This example demonstrates how to create a gRPC client with our Effect-based transport
  */
 
-import * as Effect from "effect/Effect"
-import * as Layer from "effect/Layer"
-import * as Schema from "effect/Schema"
-import * as Stream from "effect/Stream"
+import { Effect, Layer, Schema, Stream } from "effect"
 import * as GrpcClient from "../Client.js"
 import * as GrpcTransport from "../Transport.js"
 
@@ -45,9 +42,9 @@ const sayHelloStreamMethod = GrpcClient.makeMethod(
 const runClient = Effect.gen(function*() {
   // Transport configuration
   const transportConfig: GrpcTransport.GrpcTransportConfig = {
-    url: "localhost:50051",
     protoPath: "./src/example/greeter.proto",
-    serviceName: "Greeter"
+    serviceName: "Greeter",
+    url: "localhost:50051"
   }
 
   // Create the transport layer

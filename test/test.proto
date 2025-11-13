@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package example;
+
+// The greeting service definition.
+service TestService {
+  // Sends a greeting
+  rpc TestMethod (TestRequest) returns (TestReply) {}
+  // Sends a greeting stream
+  rpc TestStreamMethod (TestRequest) returns (stream TestReply) {}
+}
+
+// The request message containing the user's name.
+message TestRequest {
+  string message = 1;
+}
+
+// The response message containing the greetings
+message TestReply {
+  string result = 1;
+}
