@@ -6,17 +6,17 @@ import { Context, Effect, Layer, type Schema } from "effect"
 
 /**
  * @since 1.0.0
- * @category models
+ * @category type ids
  */
-// export interface GrpcRouter {
-//   readonly _: unique symbol
-// }
+export const GrpcRouteDefTypeId = Symbol.for("@template/basic/GrpcRouteDef")
+export type GrpcRouteDefTypeId = typeof GrpcRouteDefTypeId
 
 /**
  * @since 1.0.0
  * @category models
  */
 export interface GrpcRouteDef<I, O> {
+  readonly [GrpcRouteDefTypeId]: GrpcRouteDefTypeId
   readonly path: string
   readonly input: Schema.Schema<I, any>
   readonly output: Schema.Schema<O, any>
@@ -50,6 +50,7 @@ export const makeRoute = <I, O>(
   output: Schema.Schema<O, any>,
   handler: (input: I) => Effect.Effect<O, any, any>
 ): GrpcRouteDef<I, O> => ({
+  [GrpcRouteDefTypeId]: GrpcRouteDefTypeId,
   path,
   input,
   output,
@@ -72,7 +73,7 @@ export const make: Layer.Layer<GrpcRouter> = Layer.effect(
         output: Schema.Schema<O, any>,
         handler: (input: I) => Effect.Effect<O, any, any>
       ) => {
-        routes.push({ path, input, output, handler })
+        routes.push({ [GrpcRouteDefTypeId]: GrpcRouteDefTypeId, path, input, output, handler })
 
         return Effect.void
       },
@@ -84,9 +85,3 @@ export const make: Layer.Layer<GrpcRouter> = Layer.effect(
     })
   })
 )
-
-/**
- * @since 1.0.0
- * @category layers
- */
-export const makeLive: Layer.Layer<GrpcRouter> = make

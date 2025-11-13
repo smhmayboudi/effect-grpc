@@ -4,8 +4,8 @@
  * This example demonstrates how to create a gRPC service with our Effect-based transport
  */
 
-import { Effect, Layer, Schema } from "effect"
-import * as GrpcRouter from "../Router.js"
+import { Effect, Schema } from "effect"
+// import * as GrpcRouter from "../Router.js"
 import * as GrpcService from "../Service.js"
 
 // Define schemas for request and response
@@ -33,34 +33,34 @@ const sayHelloStreamHandler = (request: HelloRequest) =>
 
 // Create and start the gRPC server
 const runServer = Effect.gen(function*() {
-  // Create the router layer
-  const routerLayer = GrpcRouter.makeLive
+  // // Create the router layer
+  // const routerLayer = GrpcRouter.make
 
   // Create the service layer
-  const serviceLayer = GrpcService.makeLive("./src/example/greeter.proto")
+  const serviceLayer = GrpcService.make("./src/example/greeter.proto")
 
   // Combine the layers
-  const serverLayer = Layer.provideMerge(routerLayer, serviceLayer)
+  // const serverLayer = Layer.provideMerge(routerLayer, serviceLayer)
 
   // Register the service methods with specific context
   yield* (Effect.gen(function*() {
     const service = yield* GrpcService.GrpcService
-    const router = yield* GrpcRouter.GrpcRouter
+    // const router = yield* GrpcRouter.GrpcRouter
 
-    // Add routes to the router
-    yield* router.addRoute(
-      "/example.Greeter/SayHello",
-      HelloRequestSchema,
-      HelloReplySchema,
-      sayHelloHandler
-    )
+    // // Add routes to the router
+    // yield* router.addRoute(
+    //   "/example.Greeter/SayHello",
+    //   HelloRequestSchema,
+    //   HelloReplySchema,
+    //   sayHelloHandler
+    // )
 
-    yield* router.addRoute(
-      "/example.Greeter/SayHelloStream",
-      HelloRequestSchema,
-      HelloReplySchema,
-      sayHelloStreamHandler
-    )
+    // yield* router.addRoute(
+    //   "/example.Greeter/SayHelloStream",
+    //   HelloRequestSchema,
+    //   HelloReplySchema,
+    //   sayHelloStreamHandler
+    // )
 
     // Register the service with the gRPC server
     yield* service.register(
@@ -74,13 +74,14 @@ const runServer = Effect.gen(function*() {
     yield* service.start(50051)
     console.log("gRPC server running on port 50051")
 
-    // Handle the router
-    yield* router.handle
+    // // Handle the router
+    // yield* router.handle
 
-    // Keep the server running
+    // // Keep the server running
     // yield* Effect.never
   })).pipe(
-    Effect.provide(serverLayer)
+    // Effect.provide(serverLayer)
+    Effect.provide(serviceLayer)
   )
 })
 

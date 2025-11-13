@@ -8,20 +8,21 @@ import { Context, Effect, Layer, Schema } from "effect"
 
 /**
  * @since 1.0.0
- * @category models
+ * @category errors
  */
-// export interface GrpcService {
-//   readonly _: unique symbol
-// }
+export class GrpcServiceError extends Schema.TaggedError<GrpcServiceError>()("GrpcServiceError", {
+  message: Schema.String,
+  method: Schema.optional(Schema.String)
+}) {}
 
 /**
  * @since 1.0.0
  * @category models
  */
-export interface GrpcMethodDef<I, O> {
-  readonly input: Schema.Schema<I, any>
-  readonly output: Schema.Schema<O, any>
-  readonly handler: (input: I) => Effect.Effect<O, any, any>
+export interface GrpcMethodDef<I, O, R = never> {
+  readonly input: Schema.Schema<I, any, R>
+  readonly output: Schema.Schema<O, any, R>
+  readonly handler: (input: I) => Effect.Effect<O, any, R>
 }
 
 /**
@@ -36,26 +37,37 @@ export interface GrpcServiceDef {
 
 /**
  * @since 1.0.0
+ * @category type ids
+ */
+export const GrpcServiceTypeId = Symbol.for("@template/basic/GrpcService")
+export type GrpcServiceTypeId = typeof GrpcServiceTypeId
+
+/**
+ * @since 1.0.0
+ * @category models
+ */
+export interface GrpcService {
+  readonly [GrpcServiceTypeId]: GrpcServiceTypeId
+  readonly register: (service: GrpcServiceDef) => Effect.Effect<void, GrpcServiceError>
+  readonly start: (port: number) => Effect.Effect<void, GrpcServiceError>
+  readonly stop: Effect.Effect<void, never>
+}
+
+/**
+ * @since 1.0.0
  * @category tags
  */
-export class GrpcService extends Context.Tag("@template/basic/GrpcService")<
-  GrpcService,
-  {
-    readonly register: (service: GrpcServiceDef) => Effect.Effect<void>
-    readonly start: (port: number) => Effect.Effect<void>
-    readonly stop: Effect.Effect<void>
-  }
->() {}
+export const GrpcService = Context.GenericTag<GrpcService>("@template/basic/GrpcService")
 
 /**
  * @since 1.0.0
  * @category constructors
  */
-export const makeMethod = <I, O>(
-  input: Schema.Schema<I, any>,
-  output: Schema.Schema<O, any>,
-  handler: (input: I) => Effect.Effect<O, any, any>
-): GrpcMethodDef<I, O> => ({
+export const makeMethod = <I, O, R = never>(
+  input: Schema.Schema<I, any, R>,
+  output: Schema.Schema<O, any, R>,
+  handler: (input: I) => Effect.Effect<O, any, R>
+): GrpcMethodDef<I, O, R> => ({
   input,
   output,
   handler
@@ -79,96 +91,83 @@ export const makeService = (
  * @since 1.0.0
  * @category layers
  */
-export const make: (
-  protoPath: string
-) => Layer.Layer<GrpcService> = (protoPath) =>
+export const make = (protoPath: string): Layer.Layer<GrpcService> =>
   Layer.effect(
     GrpcService,
     Effect.sync(() => {
+      const packageDefinition = protoLoader.loadSync(protoPath, {
+        defaults: true,
+        enums: String,
+        keepCase: true,
+        longs: String,
+        oneofs: true
+      })
+      const grpcPackage = grpc.loadPackageDefinition(packageDefinition)
       const server = new grpc.Server()
 
       return GrpcService.of({
-        register: (service: GrpcServiceDef) =>
-          Effect.sync(() => {
-            // Load the proto file when register is called
-            const packageDefinition = protoLoader.loadSync(protoPath, {
-              defaults: true,
-              enums: String,
-              keepCase: true,
-              longs: String,
-              oneofs: true
-            })
-
-            const grpcPackage = grpc.loadPackageDefinition(packageDefinition)
-
-            // Get the service definition from the loaded proto
-            // gRPC packages typically have the structure grpcPackage[packageName][serviceName]
-            const serviceDefinition = (grpcPackage[service.packageName] as grpc.GrpcObject)[service.name]
+        [GrpcServiceTypeId]: GrpcServiceTypeId,
+        register: (serviceDef: GrpcServiceDef) =>
+          Effect.gen(function*() {
+            const serviceDefinition = (grpcPackage[serviceDef.packageName] as grpc.GrpcObject)?.[serviceDef.name]
 
             if (!serviceDefinition) {
-              throw new Error(`Service ${service.name} not found in proto file`)
+              return yield* Effect.fail(
+                new GrpcServiceError({ message: `Service ${serviceDef.name} not found in proto file`})
+              )
             }
 
             const serviceImpl: grpc.UntypedServiceImplementation = {}
 
-            for (const [methodName, methodDef] of Object.entries(service.methods)) {
+            for (const [methodName, methodDef] of Object.entries(serviceDef.methods)) {
               serviceImpl[methodName] = (
                 call: grpc.ServerUnaryCall<any, any>,
                 callback: grpc.sendUnaryData<any>
               ) => {
-                // Decode the request synchronously to avoid context issues
-                try {
-                  const decodedRequest = Schema.decodeSync(methodDef.input)(call.request)
-                  // Run the handler effect
-                  Effect.runPromise(methodDef.handler(decodedRequest) as any).then(
-                    (result) => {
-                      // Encode the response
-                      const encodedResult = Schema.encode(methodDef.output)(result)
-                      callback(null, encodedResult)
-                    },
-                    (error) => {
-                      callback(error)
-                    }
-                  )
-                } catch (error) {
-                  callback(
-                    new Error(
-                      `Request validation failed: ${error instanceof Error ? error.message : String(error)}`
-                    ),
-                    null
-                  )
-                }
+                const runHandler = Effect.gen(function*() {
+                  const decoded = yield* Schema.decode(methodDef.input)(call.request)
+                  const result = yield* methodDef.handler(decoded)
+                  return yield* Schema.encode(methodDef.output)(result)
+                }).pipe(
+                  Effect.tapErrorCause(Effect.logError),
+                  Effect.runPromise
+                )
+
+                runHandler
+                  .then((encoded) => callback(null, encoded))
+                  .catch((error) => {
+                    const grpcError = error instanceof Error ? error : new Error(String(error))
+                    callback(grpcError)
+                  })
               }
             }
 
-            // Register the service with the server
             server.addService((serviceDefinition as any).service, serviceImpl)
           }),
         start: (port: number) =>
-          Effect.async((resume) => {
-            server.bindAsync(`0.0.0.0:${port}`, grpc.ServerCredentials.createInsecure(), (error, portBound) => {
-              if (error) {
-                resume(Effect.die(error))
-              } else {
-                // server.start()
-                console.log(`gRPC server started on port ${portBound}`)
-                resume(Effect.void)
+          Effect.async<void, GrpcServiceError>((resume) => {
+            server.bindAsync(
+              `0.0.0.0:${port}`,
+              grpc.ServerCredentials.createInsecure(),
+              (error, portBound) => {
+                if (error) {
+                  resume(Effect.fail(new GrpcServiceError({ message: `Failed to bind server: ${error.message}` })))
+                } else {
+                  // server.start()
+                  console.log(`gRPC server started on port ${portBound}`)
+                  resume(Effect.void)
+                }
               }
-            })
+            )
           }),
-        stop: Effect.sync(() => {
+        stop: Effect.async<void>((resume) => {
           server.tryShutdown((error) => {
-            console.log(`gRPC server shutdown with error: ${String(error)}`)
+            if (error) {
+              console.error(`gRPC server shutdown error: ${error.message}`)
+            }
+            resume(Effect.void)
           })
         })
       })
     })
   )
-
-/**
- * @since 1.0.0
- * @category layers
- */
-export const makeLive: (
-  protoPath: string
-) => Layer.Layer<GrpcService> = (protoPath) => make(protoPath)

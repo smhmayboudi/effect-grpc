@@ -5,153 +5,170 @@
 import * as grpc from "@grpc/grpc-js"
 import * as protoLoader from "@grpc/proto-loader"
 import { Context, Effect, Layer, Schema, Stream } from "effect"
+
 /**
  * @since 1.0.0
- * @category models
+ * @category errors
  */
-// export interface GrpcTransport {
-//   readonly _: unique symbol
-// }
+export class GrpcError extends Schema.TaggedError<GrpcError>()("GrpcError", {
+  message: Schema.String,
+  code: Schema.optional(Schema.Number),
+  details: Schema.optional(Schema.String)
+}) {}
 
 /**
  * @since 1.0.0
  * @category models
  */
 export interface GrpcTransportConfig {
-  readonly headers?: Record<string, string>
+  readonly url: string
   readonly packageName: string
   readonly protoPath: string
   readonly serviceName: string
-  readonly url: string
+  readonly headers?: Record<string, string>
+}
+
+/**
+ * @since 1.0.0
+ * @category type ids
+ */
+export const GrpcTransportTypeId = Symbol.for("@template/basic/GrpcTransport")
+export type GrpcTransportTypeId = typeof GrpcTransportTypeId
+
+/**
+ * @since 1.0.0
+ * @category models
+ */
+export interface GrpcTransport {
+  readonly [GrpcTransportTypeId]: GrpcTransportTypeId
+  readonly call: <A, R>(
+    method: string,
+    request: any,
+    schema: Schema.Schema<A, any, R>
+  ) => Effect.Effect<A, GrpcError, R>
+  readonly callStream: <A, R>(
+    method: string,
+    request: any,
+    schema: Schema.Schema<A, any, R>
+  ) => Stream.Stream<A, GrpcError, R>
+  readonly close: Effect.Effect<void, never>
 }
 
 /**
  * @since 1.0.0
  * @category tags
  */
-export class GrpcTransport extends Context.Tag("@template/basic/GrpcTransport")<
-  GrpcTransport,
-  {
-    readonly call: <A, E, R>(
-      method: string,
-      request: unknown,
-      schema: Schema.Schema<A, any, R>
-    ) => Effect.Effect<A, E, R>
-    readonly callStream: <A, E, R>(
-      method: string,
-      request: unknown,
-      schema: Schema.Schema<A, any, R>
-    ) => Stream.Stream<A, E, R>
-    readonly close: Effect.Effect<void>
-  }
->() {}
+export const GrpcTransport = Context.GenericTag<GrpcTransport>("@template/basic/GrpcTransport")
+
+export const decodeWithSchema =
+  <A, R>(schema: Schema.Schema<A, any, R>) => (input: any): Effect.Effect<A, GrpcError, R> =>
+    Schema.decode(schema)(input).pipe(
+      Effect.mapError((error) =>
+        new GrpcError({
+          message: `Schema validation failed: ${error}`,
+          details: String(error)
+        })
+      )
+    )
+
+export const encodeWithSchema =
+  <A, R>(schema: Schema.Schema<A, any, R>) => (input: A): Effect.Effect<any, GrpcError, R> =>
+    Schema.encode(schema)(input).pipe(
+      Effect.mapError((error) =>
+        new GrpcError({
+          message: `Schema encoding failed: ${error}`,
+          details: String(error)
+        })
+      )
+    )
 
 /**
  * @since 1.0.0
  * @category layers
  */
-export const make: (
-  config: GrpcTransportConfig
-) => Layer.Layer<GrpcTransport> = (config) =>
+export const make = (config: GrpcTransportConfig): Layer.Layer<GrpcTransport> =>
   Layer.effect(
     GrpcTransport,
     Effect.gen(function*() {
-      // Client will be initialized when first method is called
-      let initializedClient: any = null
+      const packageDefinition = protoLoader.loadSync(config.protoPath, {
+        keepCase: true,
+        longs: String,
+        enums: String,
+        defaults: true,
+        oneofs: true
+      })
 
-      // Initialize client when first needed
-      const initializeClient = yield* Effect.gen(function*() {
-        // Load the proto file when first needed
-        const packageDefinition = protoLoader.loadSync(config.protoPath, {
-          keepCase: true,
-          longs: String,
-          enums: String,
-          defaults: true,
-          oneofs: true
-        })
+      const grpcPackage = grpc.loadPackageDefinition(packageDefinition)
 
-        // Load the gRPC package
-        const grpcPackage = grpc.loadPackageDefinition(packageDefinition)
+      // Find the service in the package structure
+      const service = (grpcPackage[config.packageName] as grpc.GrpcObject)?.[config.serviceName] as
+        | grpc.ServiceClientConstructor
+        | undefined
 
-        // Get the service using the correct package structure
-        const foundService = (grpcPackage[config.packageName] as grpc.GrpcObject)[config.serviceName]
+      if (!service) {
+        return yield* Effect.die(
+          new GrpcError({
+            message: `Service ${config.serviceName} not found in package ${config.packageName}`,
+            details: `Available packages: ${Object.keys(grpcPackage).join(", ")}`
+          })
+        )
+      }
 
-        if (!foundService) {
-          return yield* Effect.die(new Error(`Service ${config.serviceName} not found in proto`))
-        }
-
-        // Create gRPC client
-        // In a real implementation, we would create: new foundService(config.url, grpc.credentials.createInsecure())
-        // For now, we'll create a mock client
-        const mockClient: any = {
-          close: () => {} // mock close function
-        }
-
-        // Add a generic method to handle any RPC call
-        mockClient.genericCall = (req: any, callback: any) => {
-          if (callback && typeof callback === "function") {
-            // Unary call with callback
-            setImmediate(() => callback(null, req)) // mock response
-          } else {
-            // Return a promise for promise-based calls
-            return Promise.resolve(req)
-          }
-        }
-
-        // Create a proxy that maps any method call to the generic handler
-        const clientProxy = new Proxy(mockClient, {
-          get: (target, prop) => {
-            if (prop in target) {
-              return target[prop]
-            }
-            // For any unknown method, return the generic call handler
-            return target.genericCall
-          }
-        })
-
-        initializedClient = clientProxy
-        return clientProxy
-      }).pipe(Effect.cached)
+      const client = new service!(config.url, grpc.credentials.createInsecure())
 
       return GrpcTransport.of({
-        call: <A, E, R>(
-          method: string,
-          request: unknown,
-          schema: Schema.Schema<A, any, R>
-        ) =>
-          Effect.catchAll(
-            Effect.flatMap(
-              initializeClient,
-              (client) => {
-                console.log({ method, request, schema, client })
-                // In a real implementation, we would make the actual gRPC call
-                // For mock: just decode and return the request
-                return Schema.decodeUnknown(schema)(request)
+        [GrpcTransportTypeId]: GrpcTransportTypeId,
+        call: (method, request, schema) =>
+          Effect.async<any, GrpcError>((resume) => {
+            client[method](
+              request,
+              (error: grpc.ServiceError | null, response: any) => {
+                if (error) {
+                  resume(Effect.fail(
+                    new GrpcError({
+                      message: error.message,
+                      code: error.code,
+                      details: error.details
+                    })
+                  ))
+                } else {
+                  resume(Effect.succeed(response))
+                }
               }
-            ),
-            (error) => Effect.die(error)
+            )
+          }).pipe(
+            Effect.flatMap(decodeWithSchema(schema))
           ),
-        callStream: <A, E, R>(
-          method: string,
-          request: unknown,
-          schema: Schema.Schema<A, any, R>
-        ) => {
-          // For streaming, return an empty stream in mock mode
-          return Stream.empty
-        },
+        callStream: (method, request, schema) =>
+          Stream.async<any, GrpcError>((emit) => {
+            // const call = client[method](request)
+            const call = client["SayHelloStream"](request)
+
+            call.on("data", (data: any) => {
+              emit.single(Effect.succeed(data))
+            })
+
+            call.on("error", (error: grpc.ServiceError) => {
+              emit.fail(
+                new GrpcError({
+                  message: error.message,
+                  code: error.code,
+                  details: error.details
+                })
+              )
+            })
+
+            call.on("end", () => {
+              emit.end()
+            })
+          }).pipe(
+            Stream.flatMap((data) => Stream.fromEffect(decodeWithSchema(schema)(data)))
+          ),
         close: Effect.sync(() => {
-          if (initializedClient && typeof initializedClient.close === "function") {
-            initializedClient.close()
-          }
+          client.close()
         })
       })
-    })
+    }).pipe(
+      Effect.tapErrorCause(Effect.logError)
+    )
   )
-
-/**
- * @since 1.0.0
- * @category layers
- */
-export const makeLive: (
-  config: GrpcTransportConfig
-) => Layer.Layer<GrpcTransport> = (config) => make(config)
