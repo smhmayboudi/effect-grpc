@@ -4,7 +4,7 @@
 
 import * as grpc from "@grpc/grpc-js"
 import * as protoLoader from "@grpc/proto-loader"
-import { Context, Effect, Layer, Schema } from "effect"
+import { Context, Effect, Layer, Schema, Stream } from "effect"
 
 /**
  * @since 1.0.0
@@ -20,9 +20,21 @@ export class GrpcServiceError extends Schema.TaggedError<GrpcServiceError>()("Gr
  * @category models
  */
 export interface GrpcMethodDef<I, O, R = never> {
-  readonly input: Schema.Schema<I, any, R>
-  readonly output: Schema.Schema<O, any, R>
   readonly handler: (input: I) => Effect.Effect<O, any, R>
+  readonly input: Schema.Schema<I, any, R>
+  readonly isStream?: boolean
+  readonly output: Schema.Schema<O, any, R>
+}
+
+/**
+ * @since 1.0.0
+ * @category models
+ */
+export interface GrpcStreamMethodDef<I, O, R = never> {
+  readonly handler: (input: I) => Stream.Stream<O, any, R>
+  readonly input: Schema.Schema<I, any, R>
+  readonly isStream: true
+  readonly output: Schema.Schema<O, any, R>
 }
 
 /**
@@ -31,7 +43,7 @@ export interface GrpcMethodDef<I, O, R = never> {
  */
 export interface GrpcServiceDef {
   readonly name: string
-  readonly methods: Record<string, GrpcMethodDef<any, any>>
+  readonly methods: Record<string, GrpcMethodDef<any, any> | GrpcStreamMethodDef<any, any>>
   readonly packageName: string
 }
 
@@ -68,9 +80,25 @@ export const makeMethod = <I, O, R = never>(
   output: Schema.Schema<O, any, R>,
   handler: (input: I) => Effect.Effect<O, any, R>
 ): GrpcMethodDef<I, O, R> => ({
+  handler,
   input,
-  output,
-  handler
+  isStream: false,
+  output
+})
+
+/**
+ * @since 1.0.0
+ * @category constructors
+ */
+export const makeStreamMethod = <I, O, R = never>(
+  input: Schema.Schema<I, any, R>,
+  output: Schema.Schema<O, any, R>,
+  handler: (input: I) => Stream.Stream<O, any, R>
+): GrpcStreamMethodDef<I, O, R> => ({
+  handler,
+  input,
+  isStream: true,
+  output
 })
 
 /**
@@ -80,10 +108,10 @@ export const makeMethod = <I, O, R = never>(
 export const makeService = (
   packageName: string,
   name: string,
-  methods: Record<string, GrpcMethodDef<any, any>>
+  methods: Record<string, GrpcMethodDef<any, any> | GrpcStreamMethodDef<any, any>>
 ): GrpcServiceDef => ({
-  name,
   methods,
+  name,
   packageName
 })
 
@@ -113,32 +141,64 @@ export const make = (protoPath: string): Layer.Layer<GrpcService> =>
 
             if (!serviceDefinition) {
               return yield* Effect.fail(
-                new GrpcServiceError({ message: `Service ${serviceDef.name} not found in proto file`})
+                new GrpcServiceError({ message: `Service ${serviceDef.name} not found in proto file` })
               )
             }
 
             const serviceImpl: grpc.UntypedServiceImplementation = {}
 
             for (const [methodName, methodDef] of Object.entries(serviceDef.methods)) {
-              serviceImpl[methodName] = (
-                call: grpc.ServerUnaryCall<any, any>,
-                callback: grpc.sendUnaryData<any>
-              ) => {
-                const runHandler = Effect.gen(function*() {
-                  const decoded = yield* Schema.decode(methodDef.input)(call.request)
-                  const result = yield* methodDef.handler(decoded)
-                  return yield* Schema.encode(methodDef.output)(result)
-                }).pipe(
-                  Effect.tapErrorCause(Effect.logError),
-                  Effect.runPromise
-                )
+              const method = (serviceDefinition as any).service[methodName]
+              const isStream = method.requestStream || method.responseStream || methodDef.isStream
+              if (isStream) {
+                // Streaming method implementation
+                serviceImpl[methodName] = (call: grpc.ServerWritableStream<any, any>) => {
+                  // Handle error types by using try/catch to avoid the exactOptionalPropertyTypes issue
+                  const runStream = async () => {
+                    try {
+                      const decoded = Schema.decodeSync(methodDef.input)(call.request)
+                      const resultStream = methodDef.handler(decoded)
 
-                runHandler
-                  .then((encoded) => callback(null, encoded))
-                  .catch((error) => {
+                      // Process the stream by collecting and then processing each result
+                      const results = Array.from(await Effect.runPromise(Stream.runCollect(resultStream)))
+                      // Send each result to the client
+                      for (const result of results) {
+                        const encoded = Schema.encodeSync(methodDef.output)(result)
+                        call.write(encoded)
+                      }
+                      call.end()
+                    } catch (error: unknown) {
+                      const grpcError = error instanceof Error ? error : new Error(String(error))
+                      call.destroy(grpcError)
+                    }
+                  }
+                  runStream().catch((error: unknown) => {
                     const grpcError = error instanceof Error ? error : new Error(String(error))
-                    callback(grpcError)
+                    call.destroy(grpcError)
                   })
+                }
+              } else {
+                // Unary method implementation
+                serviceImpl[methodName] = (
+                  call: grpc.ServerUnaryCall<any, any>,
+                  callback: grpc.sendUnaryData<any>
+                ) => {
+                  const runHandler = Effect.gen(function*() {
+                    const decoded = yield* Schema.decode(methodDef.input)(call.request)
+                    const result = yield* methodDef.handler(decoded)
+                    return yield* Schema.encode(methodDef.output)(result)
+                  }).pipe(
+                    Effect.tapErrorCause(Effect.logError),
+                    Effect.runPromise
+                  )
+
+                  runHandler
+                    .then((encoded) => callback(null, encoded))
+                    .catch((error) => {
+                      const grpcError = error instanceof Error ? error : new Error(String(error))
+                      callback(grpcError)
+                    })
+                }
               }
             }
 

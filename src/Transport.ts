@@ -65,8 +65,8 @@ export const decodeWithSchema =
     Schema.decode(schema)(input).pipe(
       Effect.mapError((error) =>
         new GrpcError({
-          message: `Schema validation failed: ${error}`,
-          details: String(error)
+          details: String(error),
+          message: `Schema validation failed: ${error}`
         })
       )
     )
@@ -76,8 +76,8 @@ export const encodeWithSchema =
     Schema.encode(schema)(input).pipe(
       Effect.mapError((error) =>
         new GrpcError({
-          message: `Schema encoding failed: ${error}`,
-          details: String(error)
+          details: String(error),
+          message: `Schema encoding failed: ${error}`
         })
       )
     )
@@ -108,8 +108,8 @@ export const make = (config: GrpcTransportConfig): Layer.Layer<GrpcTransport> =>
       if (!service) {
         return yield* Effect.die(
           new GrpcError({
-            message: `Service ${config.serviceName} not found in package ${config.packageName}`,
-            details: `Available packages: ${Object.keys(grpcPackage).join(", ")}`
+            details: `Available packages: ${Object.keys(grpcPackage).join(", ")}`,
+            message: `Service ${config.serviceName} not found in package ${config.packageName}`
           })
         )
       }
@@ -126,9 +126,9 @@ export const make = (config: GrpcTransportConfig): Layer.Layer<GrpcTransport> =>
                 if (error) {
                   resume(Effect.fail(
                     new GrpcError({
-                      message: error.message,
                       code: error.code,
-                      details: error.details
+                      details: error.details,
+                      message: error.message
                     })
                   ))
                 } else {
@@ -141,8 +141,7 @@ export const make = (config: GrpcTransportConfig): Layer.Layer<GrpcTransport> =>
           ),
         callStream: (method, request, schema) =>
           Stream.async<any, GrpcError>((emit) => {
-            // const call = client[method](request)
-            const call = client["SayHelloStream"](request)
+            const call = client[method](request)
 
             call.on("data", (data: any) => {
               emit.single(Effect.succeed(data))
@@ -151,9 +150,9 @@ export const make = (config: GrpcTransportConfig): Layer.Layer<GrpcTransport> =>
             call.on("error", (error: grpc.ServiceError) => {
               emit.fail(
                 new GrpcError({
-                  message: error.message,
                   code: error.code,
-                  details: error.details
+                  details: error.details,
+                  message: error.message
                 })
               )
             })
@@ -162,6 +161,10 @@ export const make = (config: GrpcTransportConfig): Layer.Layer<GrpcTransport> =>
               emit.end()
             })
           }).pipe(
+            Stream.map((data) =>
+              // If the data is wrapped in an Exit.Success object, extract the value
+              data._tag === "Success" && data.value !== undefined ? data.value : data
+            ),
             Stream.flatMap((data) => Stream.fromEffect(decodeWithSchema(schema)(data)))
           ),
         close: Effect.sync(() => {

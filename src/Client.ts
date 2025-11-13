@@ -96,8 +96,8 @@ export const make = (): Layer.Layer<GrpcClient, never, GrpcTransport> =>
             Schema.encode(method.input)(input).pipe(
               Effect.mapError((error) =>
                 new GrpcError({
-                  message: `Encoding failed: ${error}`,
-                  details: String(error)
+                  details: String(error),
+                  message: `Encoding failed: ${error}`
                 })
               )
             )

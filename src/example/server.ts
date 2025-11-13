@@ -4,7 +4,7 @@
  * This example demonstrates how to create a gRPC service with our Effect-based transport
  */
 
-import { Effect, Schema } from "effect"
+import { Effect, Schema, Stream } from "effect"
 // import * as GrpcRouter from "../Router.js"
 import * as GrpcService from "../Service.js"
 
@@ -29,7 +29,11 @@ const HelloReplySchema: Schema.Schema<HelloReply, any> = Schema.Struct({
 const sayHelloHandler = (request: HelloRequest) => Effect.succeed<HelloReply>({ message: `Hello, ${request.name}!` })
 
 const sayHelloStreamHandler = (request: HelloRequest) =>
-  Effect.succeed<HelloReply>({ message: `Hello stream, ${request.name}!` })
+  Stream.make(
+    { message: `Hello stream, ${request.name}! 1` },
+    { message: `Hello stream, ${request.name}! 2` },
+    { message: `Hello stream, ${request.name}! 3` }
+  )
 
 // Create and start the gRPC server
 const runServer = Effect.gen(function*() {
@@ -66,7 +70,7 @@ const runServer = Effect.gen(function*() {
     yield* service.register(
       GrpcService.makeService("example", "Greeter", {
         SayHello: GrpcService.makeMethod(HelloRequestSchema, HelloReplySchema, sayHelloHandler),
-        SayHelloStream: GrpcService.makeMethod(HelloRequestSchema, HelloReplySchema, sayHelloStreamHandler)
+        SayHelloStream: GrpcService.makeStreamMethod(HelloRequestSchema, HelloReplySchema, sayHelloStreamHandler)
       })
     )
 
