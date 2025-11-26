@@ -10,7 +10,7 @@ import { Context, Effect, Layer, Schema, Stream } from "effect"
  * @since 1.0.0
  * @category errors
  */
-export class GrpcError extends Schema.TaggedError<GrpcError>()("GrpcError", {
+export class GrpcError extends Schema.TaggedError<GrpcError>("GrpcError")("GrpcError", {
   message: Schema.String,
   code: Schema.optional(Schema.Number),
   details: Schema.optional(Schema.String)

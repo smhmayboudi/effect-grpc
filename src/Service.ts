@@ -10,7 +10,7 @@ import { Context, Effect, Layer, Schema, Stream } from "effect"
  * @since 1.0.0
  * @category errors
  */
-export class GrpcServiceError extends Schema.TaggedError<GrpcServiceError>()("GrpcServiceError", {
+export class GrpcServiceError extends Schema.TaggedError<GrpcServiceError>("GrpcServiceError")("GrpcServiceError", {
   message: Schema.String,
   method: Schema.optional(Schema.String)
 }) {}
